@@ -12,3 +12,6 @@ chromadb
 tiktoken
 pydantic
 docx2txt
+langchain-chromadb
+pymongo
+langchain-mongodb
