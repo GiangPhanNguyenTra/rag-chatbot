@@ -5,6 +5,9 @@ from langchain.memory import ConversationBufferMemory
 from utils.llm_config import get_global_llm, get_global_personal_memory_agent 
 from utils.prompts import CHAT_PROMPT
 from tools.retrieval_tools import get_global_retriever_main_docs, get_global_retriever_long_term 
+from utils.reranker import rerank_documents
+import asyncio
+from langchain.prompts import PromptTemplate
 
 llm_orchestrator = get_global_llm()
 personal_memory_agent = get_global_personal_memory_agent()
@@ -14,18 +17,64 @@ retriever_long_term = get_global_retriever_long_term()
 
 chat_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True, output_key='answer')
 
+
+async def _generative_alternative_queries(user_query: str, llm) -> List[str]:
+    prompt = PromptTemplate.from_template(
+        """Bạn là một trợ lý AI chuyên nghiệp. Hãy xem xét câu hỏi của người dùng và tạo ra 3 phiên bản câu hỏi khác có thể giúp tìm kiếm thông tin liên quan trong một cơ sở dữ liệu.
+
+        Các phiên bản câu hỏi nên bao gồm:
+        1. Một câu hỏi trực tiếp hơn hoặc tập trung vào một khía cạnh khác.
+        2. Một câu hỏi dưới dạng một cụm từ tìm kiếm, liệt kê các từ khóa chính.
+        3. Một câu hỏi giả định về một mối quan hệ hoặc một thuộc tính.
+
+        Trả lời chỉ với các câu hỏi được tạo, mỗi câu trên một dòng mới. KHÔNG thêm bất kỳ lời giải thích nào.
+
+        Câu hỏi gốc: {question}
+        
+        Các câu hỏi thay thế:
+        """
+    )
+
+    generation_chain = prompt | llm
+    response = await generation_chain.ainvoke({"question": user_query})
+    queries = [line.strip() for line in response.content.strip().split("\n") if line.strip()]
+
+    all_queries = [user_query] + queries
+    print(f"Orchestrator: Đã tạo các câu hỏi thay thế: {all_queries}")
+    return all_queries
+
 async def invoke_orchestrator_agent(user_query: str) -> Dict:
     print(f"Orchestrator nhận câu hỏi: {user_query}")
     
     current_chat_history_messages_list = chat_memory.load_memory_variables({})['chat_history']
 
+    alternative_queries = await _generative_alternative_queries(user_query, llm_orchestrator)
     print("Orchestrator: Đang truy xuất tài liệu từ nguồn chính...")
-    retrieved_docs_main = await retriever_main_docs.ainvoke(user_query)
-    document_context = "\n\n".join([doc.page_content for doc in retrieved_docs_main])
     
+    docs_tasks = [retriever_main_docs.ainvoke(q) for q in alternative_queries]
+    facts_tasks = [retriever_long_term.ainvoke(q) for q in alternative_queries]
+
+    docs_results_lists = await asyncio.gather(*docs_tasks)
+    facts_results_lists = await asyncio.gather(*facts_tasks)
+
+    # retrieved_docs_main = await retriever_main_docs.ainvoke(user_query)
+    # document_context = "\n\n".join([doc.page_content for doc in retrieved_docs_main])
+    
+    unique_docs = {doc.page_content: doc for sublist in docs_results_lists for doc in sublist}
+    retrieved_docs_main = list(unique_docs.values())
+
+    unique_facts = {fact.page_content: fact for sublist in facts_results_lists for fact in sublist}
+    retrieved_facts = list(unique_facts.values())
+
     print("Orchestrator: Đang truy xuất facts từ bộ nhớ dài hạn...")
     retrieved_facts = await retriever_long_term.ainvoke(user_query)
     long_term_facts_context = "\n\n".join([fact.page_content for fact in retrieved_facts])
+
+    reranked_docs_main = rerank_documents(user_query, retrieved_docs_main, top_k=4) 
+    reranked_facts = rerank_documents(user_query, retrieved_facts, top_k=3)
+
+    document_context = "\n\n".join([doc.page_content for doc in reranked_docs_main])
+    long_term_facts_context = "\n\n".join([fact.page_content for fact in reranked_facts])
 
     print("\n--- Orchestrator: Các đoạn văn bản đã được truy xuất (từ tài liệu chính) ---")
     if retrieved_docs_main:

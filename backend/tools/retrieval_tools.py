@@ -28,11 +28,11 @@ except Exception as e:
 
 
 def get_global_retriever_main_docs():
-    return global_vectorstore_docs_retriever.as_retriever(search_kwargs={"k": 5})
+    return global_vectorstore_docs_retriever.as_retriever(search_kwargs={"k": 15})
 
 def get_global_retriever_long_term():
     personal_memory_agent_instance = get_global_personal_memory_agent()
-    return personal_memory_agent_instance.long_term_vectorstore.as_retriever(search_kwargs={"k": 3})
+    return personal_memory_agent_instance.long_term_vectorstore.as_retriever(search_kwargs={"k": 8})
 
 
 document_retriever_tool = Tool(
