@@ -6,7 +6,7 @@ load_dotenv()
 
 GLOBAL_LLM = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature = 0.7)
 GLOBAL_EMBEDDINGS_MODEL = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-GLOBAL_EXTRACTION_LLM = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature = 0.0)
+GLOBAL_EXTRACTION_LLM = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature = 0.0)
 
 MONGO_URI = os.environ.get("MONGO_URI")
 DB_NAME = "rag_db"

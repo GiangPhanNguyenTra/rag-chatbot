@@ -3,15 +3,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import List
 
-from agents.orchestrator import invoke_orchestrator_agent
-from utils.llm_config import get_global_llm, get_global_embeddings_model, get_global_extraction_llm, get_mongo_connection_details
-
-from pymongo import MongoClient
+from graph.builder import create_chatbot_graph
+from langchain_core.messages import HumanMessage, AIMessage
 
 load_dotenv()
-app = FastAPI()
+app = FastAPI(title="Multi-Agent Chatbot API")
 
 origins = [
     "http://localhost:3000"
@@ -25,35 +23,47 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-MONGO_URI, DB_NAME, DOCS_COLLECTION_NAME, FACTS_COLLECTION_NAME,  DOCS_VECTOR_INDEX_NAME, FACTS_VECTOR_INDEX_NAME = get_mongo_connection_details()
-mongo_client = MongoClient(MONGO_URI)
-mongo_db = mongo_client[DB_NAME]
+chatbot_graph = create_chatbot_graph()
 
-global_llm = get_global_llm()
-global_embeddings_model = get_global_embeddings_model()
-global_extraction_llm = get_global_extraction_llm()
+class ChatMessage(BaseModel):
+    role: str # "human" or "ai"
+    content: str
 
 class ChatRequest(BaseModel):
     query: str
-    # session_id: str = "default_session" 
+    chat_history: List[ChatMessage] = []
 
 class ChatResponse(BaseModel):
     answer: str
 
 @app.post("/chat", response_model = ChatResponse)
 async def chat_with_multi_agent(request: ChatRequest):
-    user_query = request.query
-    try:
-        response = await invoke_orchestrator_agent(user_query)
-        llm_answer = response["answer"]
+    langchain_history = []
+    for msg in request.chat_history:
+        if msg.role == "human":
+            langchain_history.append(HumanMessage(content=msg.content))
+        elif msg.role == "ai":
+            langchain_history.append(AIMessage(content=msg.content))
+        else:
+            raise HTTPException(status_code=400, detail="Invalid message role")
+    
+    # Chuẩn bị cho input đồ thị
+    initial_state = {
+        "original_question": request.query,
+        "chat_history": langchain_history
+    }
 
-        return ChatResponse(answer=llm_answer)
-    except Exception as e:    
-        print(f"Error: khi xử lý yêu cầu của Multi Agent: {e}")
+    try:
+        # ainvoke sẽ chạy toàn bộ đồ thị và trả về state cuối cùng
+        final_state = await chatbot_graph.ainvoke(initial_state)
+        answer = final_state.get("final_answer", "Xin lỗi, tôi không thể tìm thấy câu trả lời.")
+
+        return ChatResponse(answer=answer)
+    except Exception as e:
+        print(f"Error: Lỗi khi xử lý đồ thị LangGraph: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Có lỗi xảy ra khi xử lý yêu cầu của bạn.")
-
 
 @app.get("/")
 async def read_root():
