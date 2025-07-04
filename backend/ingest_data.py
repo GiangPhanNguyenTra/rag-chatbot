@@ -28,9 +28,9 @@ def ingest_documents_to_mongodb_atlas():
     client = MongoClient(MONGO_URI, tls=True, tlsCAFile=certifi.where())
     try:
         client.admin.command("ping")
-        print("✅ Đã kết nối MongoDB Atlas thành công!")
+        print("Đã kết nối MongoDB Atlas thành công!")
     except Exception as e:
-        print("❌ Kết nối thất bại:", e)
+        print("Kết nối thất bại:", e)
         exit()
 
     db = client[DB_NAME]
@@ -83,8 +83,7 @@ def ingest_documents_to_mongodb_atlas():
         embeddings_model, 
         breakpoint_threshold_type="percentile" # Đây là phương pháp xác định điểm ngắt phổ biến
     )
-    all_texts = "\n\n".join([doc.page_content for doc in documents])
-    chunks = text_splitter.create_documents([all_texts])
+
     print("Đang chia từng tài liệu để giữ lại metadata...")
     chunks = []
     for doc in documents:
@@ -95,7 +94,6 @@ def ingest_documents_to_mongodb_atlas():
             chunk.metadata = doc.metadata.copy()
         chunks.extend(doc_chunks)
 
-    # BẠN CÓ THỂ GIỮ LẠI BỘ LỌC NÀY
     # Lọc bỏ các chunks quá ngắn, có thể là nhiễu
     chunks = [
         chunk for chunk in chunks

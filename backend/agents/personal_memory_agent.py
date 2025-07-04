@@ -56,10 +56,6 @@ class PersonalMemoryAgent:
         """
         Trích xuất và lưu facts từ hội thoại vào bộ nhớ dài hạn, đảm bảo không trùng lặp.
         """
-        # Format hội thoại bao gồm query và answer hiện tại
-        # full_conversation = chat_history_messages + [HumanMessage(content=query), AIMessage(content=answer)]
-        # formatted_conversation = "\n".join([f"{msg.type.capitalize()}: {msg.content}" for msg in full_conversation])
-
         human_messages = [msg for msg in chat_history_messages if isinstance(msg, HumanMessage)] + [HumanMessage(content=query)]
         formatted_conversation = "\n".join([f"Human: {msg.content}" for msg in human_messages])
         

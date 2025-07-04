@@ -82,11 +82,3 @@ async def _internal_extract_and_store_facts(query: str, answer: str, chat_histor
         print(f"FactExtractionTool: Lỗi khi trích xuất hoặc lưu facts: {e}")
         import traceback
         traceback.print_exc()
-
-"""
-extract_facts_as_tool = Tool(
-    name="extract_and_store_facts",
-    func=lambda qa_history_str: asyncio.run(_internal_extract_and_store_facts_from_str(qa_history_str)),
-    description="Hữu ích để trích xuất và lưu thông tin quan trọng từ hội thoại. Input là một string JSON chứa 'query', 'answer', 'chat_history'."
-)
-"""
